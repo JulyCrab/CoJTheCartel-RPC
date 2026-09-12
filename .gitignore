@@ -15,10 +15,6 @@ obj/
 # Exclude analysis scripts
 analysis_scripts/
 
-# Exclude build scripts
-build.bat
-build.ps1
-
 # Archives
 *.rar
 *.zip
