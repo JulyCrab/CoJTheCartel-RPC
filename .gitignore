@@ -1,0 +1,28 @@
+# Build artifacts
+bin/
+obj/
+*.exe
+*.obj
+*.pdb
+*.ilk
+
+# Visual Studio user-specific files
+*.vcxproj.user
+*.suo
+*.user
+.vs/
+
+# Exclude analysis scripts
+analysis_scripts/
+
+# Exclude build scripts
+build.bat
+build.ps1
+
+# Archives
+*.rar
+*.zip
+
+# Game files (DLLs and data paks)
+CoJTheCartelDLLs/
+CoJTheCartelMaps paks/
