@@ -7,34 +7,40 @@ param(
 
 Write-Host "=== CartelRichPresence Build Script ===" -ForegroundColor Cyan
 
-# Find MSBuild
+# Find MSBuild using vswhere (official method)
 $msbuildPath = $null
-$vsPaths = @(
-    "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe",
-    "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
-    "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe",
-    "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe",
-    "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
-)
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 
-foreach ($path in $vsPaths) {
-    if (Test-Path $path) {
-        $msbuildPath = $path
-        break
-    }
-}
-
-if (-not $msbuildPath) {
-    # Try vswhere
-    $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
-    if (Test-Path $vswhere) {
-        $vsPath = & $vswhere -latest -property installationPath
+if (Test-Path $vswhere) {
+    try {
+        $vsPath = & $vswhere -latest -property installationPath -ErrorAction SilentlyContinue
         if ($vsPath) {
             $msbuildPath = Join-Path $vsPath "MSBuild\Current\Bin\MSBuild.exe"
             if (-not (Test-Path $msbuildPath)) {
                 $msbuildPath = $null
             }
+        }
+    } catch {
+        # vswhere failed, continue to fallback
+    }
+}
+
+# Fallback: Check common installation paths
+if (-not $msbuildPath) {
+    $vsPaths = @(
+        "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe",
+        "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe",
+        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+        "D:\VS2022\MSBuild\Current\Bin\MSBuild.exe"
+    )
+
+    foreach ($path in $vsPaths) {
+        if (Test-Path $path) {
+            $msbuildPath = $path
+            break
         }
     }
 }
