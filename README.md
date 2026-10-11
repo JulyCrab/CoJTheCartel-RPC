@@ -26,7 +26,7 @@ Run `build.bat` or `.\build.ps1` to compile.
 
 ## How it works
 
-Uses memory scanning and function hooking to read game state from the engine and game DLLs. The analysis scripts in `analysis_scripts/` were used to reverse engineer the needed offsets and structures.
+Uses memory scanning and function hooking to read game state from the engine and game DLLs.
 
 ## Technical Details
 
@@ -38,7 +38,6 @@ Uses memory scanning and function hooking to read game state from the engine and
 ## Files
 
 - `src/` - C++ source code
-- `analysis_scripts/` - PowerShell and C++ tools for reverse engineering
 - `analysis_output/` - Game DLL analysis results (exports, strings, RTTI)
 - `build.ps1` / `build.bat` - Build scripts
 
