@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Call of Juarez: The Cartel RPC Join</title>
+<style>
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+    background: #e8e8ed;
+    color: #3a3a3c;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    text-align: center;
+}
+
+h1 {
+    margin: 0 0 12px;
+    font-size: 48px;
+    font-weight: 600;
+}
+
+p {
+    margin: 0;
+    font-size: 19px;
+    color: #7c7c80;
+}
+
+.game {
+    margin-bottom: 10px;
+    font-size: 17px;
+    font-weight: 600;
+    color: #b8622f;
+}
+
+@media (prefers-color-scheme: dark) {
+    body { background: #1c1c1e; color: #d8d8dc; }
+    p { color: #8e8e93; }
+    .game { color: #d07a45; }
+}
+
+@media (max-width: 500px) {
+    h1 { font-size: 32px; }
+}
+</style>
+</head>
+<body>
+<div id="error" hidden>
+    <p class="game">Call of Juarez: The Cartel</p>
+    <h1>This join link isn't valid.</h1>
+    <p>It may have expired. Ask your friend to share a new one.</p>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const lobby = params.get("lobby");
+const id = params.get("id");
+const isNumber = value => /^\d{1,20}$/.test(value);
+
+if (isNumber(lobby) && (!id || isNumber(id))) {
+    location.replace(`steam://joinlobby/33420/${lobby}` + (id ? `/${id}` : ""));
+} else {
+    document.getElementById("error").hidden = false;
+}
+</script>
+</body>
+</html>
