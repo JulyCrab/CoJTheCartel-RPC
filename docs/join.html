@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Call of Juarez: The Cartel RPC Join</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 body {
     margin: 0;
@@ -15,7 +16,10 @@ body {
     box-sizing: border-box;
     background: #e8e8ed;
     color: #3a3a3c;
-    font-family: -apple-system, "Segoe UI", sans-serif;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-align: center;
 }
 
@@ -39,18 +43,29 @@ p {
 }
 
 @media (prefers-color-scheme: dark) {
-    body { background: #1c1c1e; color: #d8d8dc; }
-    p { color: #8e8e93; }
-    .game { color: #d07a45; }
+    body {
+        background: #1c1c1e;
+        color: #d8d8dc;
+    }
+
+    p {
+        color: #8e8e93;
+    }
+
+    .game {
+        color: #d07a45;
+    }
 }
 
 @media (max-width: 500px) {
-    h1 { font-size: 32px; }
+    h1 {
+        font-size: 32px;
+    }
 }
 </style>
 </head>
 <body>
-<div id="error" hidden>
+<div id="error" hidden role="alert" aria-hidden="true" tabindex="-1">
     <p class="game">Call of Juarez: The Cartel</p>
     <h1>This join link isn't valid.</h1>
     <p>It may have expired. Ask your friend to share a new one.</p>
@@ -64,7 +79,10 @@ const isNumber = value => /^\d{1,20}$/.test(value);
 if (isNumber(lobby) && (!id || isNumber(id))) {
     location.replace(`steam://joinlobby/33420/${lobby}` + (id ? `/${id}` : ""));
 } else {
-    document.getElementById("error").hidden = false;
+    const err = document.getElementById("error");
+    err.hidden = false;
+    err.setAttribute("aria-hidden", "false");
+    err.focus();
 }
 </script>
 </body>
