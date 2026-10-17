@@ -168,7 +168,7 @@ std::string MakeMultiplayerState(const GameState& state) {
     case MatchProgress::LobbyNotFull:     return "Waiting for players";
     case MatchProgress::LobbyFull:        return "Lobby full, starting soon";
     case MatchProgress::LobbyMerging:     return "Looking for more players";
-    case MatchProgress::LoadingScreen:    return "Loading into the match";
+    case MatchProgress::LoadingScreen:    return "Loading into a match";
     case MatchProgress::ResultScreen:     return "Checking the results";
     case MatchProgress::ReturningToLobby: return "Returning to the lobby";
     case MatchProgress::NearEnd:          return "Final moments";
