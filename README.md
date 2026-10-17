@@ -1,13 +1,13 @@
-# Call of Juarez: The Cartel - Discord Rich Presence
+# Call of Juarez: The Cartel Discord Rich Presence
 
-Shows what you're doing in Call of Juarez: The Cartel on Discord.
+Shows what you're doing in Call of Juarez: The Cartel on Discord
 
 ## What it does
 
 Campaign:
 - Current chapter and story progress
 - Your character (Ben, Kim or Eddie), with their portrait on Discord
-- Co-op lobbies and how many players are in your game
+- Coop lobbies and how many players are in your game
 
 Multiplayer:
 - Lobby status (setting up, waiting for players, lobby full)
@@ -19,8 +19,16 @@ Multiplayer:
 
 When you're in an online lobby, friends can join you in two ways:
 
-- **Discord's Join button.** Works for friends who also run this mod. It also shows up when you invite someone from Discord chat.
-- **Copy Join Link.** A button added to the pause menu and the multiplayer menu. It copies a link you can paste anywhere; whoever opens it joins your lobby through Steam, with or without the mod.
+- **Discord's Join button.** Works for friends who also run this mod. It also shows up when you invite someone from Discord chat
+- **Copy Join Link.** A button added to the pause menu and the multiplayer menu. It copies a link you can paste anywhere, whoever opens it joins your lobby through Steam, with or without the mod
+
+### Tips
+
+- For Discord invites, you both need the `.asi` installed and must have run the game with it at least once
+- To send an invite, open a chat on discord, then click the "plus" icon while in an open game lobby (it has to be created first)
+- For friends without the `.asi`, host a lobby first. The "Copy Join Link" button will show up, copy it and send it over!
+
+That's it, it's meant to be simple :P
 
 ## Installation
 
@@ -48,14 +56,6 @@ Reads the game state from `engine_x86_rwdi.dll` and `game_x86_rwdi.dll` and then
 - Steam lobby callbacks provide the lobby to join
 - The menu buttons are added by patching the game's menu files as they load
 - Rank titles are read from the game's text files, so they follow the game's lang thing, for example if you have 
-
-# Invites & Multiplayer
-
-To invite people through discord's integrated thing, both of you must have the .asi installed and have previously runned the game with the .asi at least once!
-
-For people who don't have the .asi, you can first host a lobby, and then a button will appear as "Copy Join Link", it'll copy into your clipboard and then send it to your friend! 
-
-That's all, it's made to be very simple! :P
 
 ## Files
 
