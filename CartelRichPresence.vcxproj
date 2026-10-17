@@ -85,13 +85,21 @@
     <ClInclude Include="src\Config.h" />
     <ClInclude Include="src\DiscordIpc.h" />
     <ClInclude Include="src\GameState.h" />
+    <ClInclude Include="src\GameFiles.h" />
+    <ClInclude Include="src\RankNames.h" />
+    <ClInclude Include="src\MenuButtons.h" />
     <ClInclude Include="src\Log.h" />
+    <ClInclude Include="src\SteamLobby.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Config.cpp" />
     <ClCompile Include="src\DiscordIpc.cpp" />
     <ClCompile Include="src\GameState.cpp" />
+    <ClCompile Include="src\GameFiles.cpp" />
+    <ClCompile Include="src\RankNames.cpp" />
+    <ClCompile Include="src\MenuButtons.cpp" />
     <ClCompile Include="src\Log.cpp" />
+    <ClCompile Include="src\SteamLobby.cpp" />
     <ClCompile Include="src\dllmain.cpp" />
   </ItemGroup>
   <ItemGroup>

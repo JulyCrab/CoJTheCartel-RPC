@@ -63,6 +63,10 @@ bool DiscordIpc::Connect(std::string_view applicationId) {
         return false;
     }
     Log("Connected to Discord IPC.");
+
+    // Needed to receive ACTIVITY_JOIN when a friend presses Join
+    const std::string subscribe = "{\"cmd\":\"SUBSCRIBE\",\"evt\":\"ACTIVITY_JOIN\",\"nonce\":\"" + std::to_string(nonce_++) + "\"}";
+    WriteFrame(kFrame, subscribe);
     return true;
 }
 
@@ -88,10 +92,27 @@ bool DiscordIpc::SetActivity(const DiscordActivity& activity) {
         if (comma) json << ',';
         json << "\"assets\":{\"large_image\":\"" << Escape(activity.largeImage) << '\"';
         if (!activity.largeText.empty()) json << ",\"large_text\":\"" << Escape(activity.largeText) << '\"';
+        if (!activity.smallImage.empty()) {
+            json << ",\"small_image\":\"" << Escape(activity.smallImage) << '\"';
+            if (!activity.smallText.empty()) json << ",\"small_text\":\"" << Escape(activity.smallText) << '\"';
+        }
         json << '}';
         comma = true;
     }
-    if (!activity.buttonLabel.empty() && !activity.buttonUrl.empty()) {
+    if (!activity.partyId.empty()) {
+        if (comma) json << ',';
+        json << "\"party\":{\"id\":\"" << Escape(activity.partyId) << '\"';
+        if (activity.partyMax > 0 && activity.partySize > 0) {
+            json << ",\"size\":[" << activity.partySize << ',' << activity.partyMax << ']';
+        }
+        json << '}';
+        comma = true;
+    }
+    // Discord rejects the whole activity when it has both
+    if (!activity.joinSecret.empty()) {
+        if (comma) json << ',';
+        json << "\"secrets\":{\"join\":\"" << Escape(activity.joinSecret) << "\"}";
+    } else if (!activity.buttonLabel.empty() && !activity.buttonUrl.empty()) {
         if (comma) json << ',';
         json << "\"buttons\":[{\"label\":\"" << Escape(activity.buttonLabel)
              << "\",\"url\":\"" << Escape(activity.buttonUrl) << "\"}]";
@@ -104,25 +125,33 @@ bool DiscordIpc::SetActivity(const DiscordActivity& activity) {
     return true;
 }
 
-void DiscordIpc::Pump() {
-    if (!IsConnected()) return;
+std::string DiscordIpc::Pump() {
+    std::string joinSecret;
+    if (!IsConnected()) return joinSecret;
     for (;;) {
         DWORD available = 0;
         if (!PeekNamedPipe(pipe_, nullptr, 0, nullptr, &available, nullptr)) {
             Disconnect();
-            return;
+            return joinSecret;
         }
-        if (available < 8) return;
+        if (available < 8) return joinSecret;
         std::uint32_t opcode = 0;
         std::string json;
         if (!ReadFrame(opcode, json)) {
             Disconnect();
-            return;
+            return joinSecret;
         }
         if (opcode == kPing) WriteFrame(kPong, json);
         if (opcode == kClose) {
             Disconnect();
-            return;
+            return joinSecret;
+        }
+        if (opcode != kFrame) continue;
+        const std::string evt = ExtractString(json, "evt");
+        if (evt == "ACTIVITY_JOIN") {
+            joinSecret = ExtractString(json, "secret");
+        } else if (evt == "ERROR") {
+            Log("Discord error: %s", ExtractString(json, "message").c_str());
         }
     }
 }
@@ -152,6 +181,24 @@ bool DiscordIpc::ReadFrame(std::uint32_t& opcode, std::string& json) {
     if (header[1] && !ReadAll(pipe_, payload.data(), header[1])) return false;
     json.assign(payload.begin(), payload.end());
     return true;
+}
+
+// Good enough for the few string fields we need from Discord's replies
+std::string DiscordIpc::ExtractString(const std::string& json, const char* key) {
+    const std::string needle = std::string("\"") + key + "\"";
+    size_t pos = json.find(needle);
+    if (pos == std::string::npos) return "";
+    pos = json.find(':', pos + needle.size());
+    if (pos == std::string::npos) return "";
+    pos = json.find_first_not_of(" \t\r\n", pos + 1);
+    if (pos == std::string::npos || json[pos] != '"') return "";
+
+    std::string result;
+    for (++pos; pos < json.size() && json[pos] != '"'; ++pos) {
+        if (json[pos] == '\\' && pos + 1 < json.size()) ++pos;
+        result += json[pos];
+    }
+    return result;
 }
 
 std::string DiscordIpc::Escape(std::string_view value) {

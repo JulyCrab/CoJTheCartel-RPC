@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <cstdarg>
 #include <cstdio>
+#include <share.h>
 #include <mutex>
 #include <memory>
 
@@ -16,9 +17,13 @@ std::mutex g_mutex;
 
 void OpenLog(std::string_view path) {
     std::lock_guard<std::mutex> lock(g_mutex);
-    FILE* file = nullptr;
-    fopen_s(&file, std::string(path).c_str(), "w");
-    g_file.reset(file);
+    // Keep the previous session's log so an accidental relaunch doesn't wipe it
+    const std::string file_path(path);
+    const std::string previous = file_path.substr(0, file_path.find_last_of('.')) + ".prev.log";
+    MoveFileExA(file_path.c_str(), previous.c_str(), MOVEFILE_REPLACE_EXISTING);
+
+    // fopen_s would lock the file, this keeps it readable while the game runs
+    g_file.reset(_fsopen(file_path.c_str(), "w", _SH_DENYWR));
 }
 
 void Log(const char* format, ...) {

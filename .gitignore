@@ -20,5 +20,5 @@ analysis_scripts/
 *.zip
 
 # Game files (DLLs and data paks)
-CoJTheCartelDLLs/
+DLL/
 CoJTheCartelMaps paks/

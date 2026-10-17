@@ -2,6 +2,8 @@
 #include "ChapterData.h"
 #include "Log.h"
 
+#include <cstring>
+
 GameStateReader::GameStateReader(const Config& config) 
     : config_(config) {
 }
@@ -18,7 +20,8 @@ static void* SafeReadPtr(void* ptr) {
 
 bool GameStateReader::ResolvePointers() {
     if (engineGamePointer_) return true; // Already resolved
-    
+    if (unsupportedBuild_) return false;
+
     engineBase_ = GetModuleHandleA("engine_x86_rwdi.dll");
     gameBase_ = GetModuleHandleA("game_x86_rwdi.dll");
     
@@ -32,11 +35,12 @@ bool GameStateReader::ResolvePointers() {
     
     if (!pGetActiveLevel_ || !pGetLevelName_) {
         Log("Failed to find engine exported functions!");
+        unsupportedBuild_ = true;
         return false;
     }
 
-    // Found via reverse engineering - see analysis_output/engine_exports.txt
-    // CGame inherits from IGame, so this pointer works for both
+    // Found via reverse engineering
+    // Btw, CGame inherits from IGame, so this pointer works for both
     void* ptr = SafeReadPtr(reinterpret_cast<char*>(engineBase_) + kEngineGamePointerRVA1);
     if (ptr) {
         engineGamePointer_ = reinterpret_cast<char*>(engineBase_) + kEngineGamePointerRVA1;
@@ -49,8 +53,7 @@ bool GameStateReader::ResolvePointers() {
         }
     }
     
-    if (!engineGamePointer_) Log("Failed to resolve EngineGamePointer!");
-    
+    // Stays null until the engine has finished starting up
     return engineGamePointer_ != nullptr;
 }
 
@@ -104,6 +107,22 @@ static int SafeReadInt(void* addr) {
     return result;
 }
 
+static bool SafeReadBytes(const void* addr, void* out, size_t size) {
+    if (!addr) return false;
+    __try {
+        memcpy(out, addr, size);
+        return true;
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+template <typename T>
+static bool SafeRead(const void* base, uintptr_t offset, T& out) {
+    return SafeReadBytes(static_cast<const char*>(base) + offset, &out, sizeof(T));
+}
+
 // Reuse the engine's CGame pointer since it's the same object
 bool GameStateReader::ResolveGameSingleton() {
     if (gameSingletonResolved_) return gameSingletonPointer_ != nullptr;
@@ -119,162 +138,21 @@ bool GameStateReader::ResolveGameSingleton() {
     return false;
 }
 
-// Character detection with hotkey override support
-
-static ECharacter g_ActiveCharacter = ECharacter::Unknown;
-
-extern "C" void OnSessionUpdate(void* pSession) {
-    if (pSession) {
-        int charEnum = *reinterpret_cast<int*>(static_cast<char*>(pSession) + GameStateReader::kSessionCharacterOffset);
-        auto character = static_cast<ECharacter>(charEnum);
-        if (character != g_ActiveCharacter && charEnum >= 0 && charEnum < 100) {
-            Log("SessionUpdate: Character Enum changed to %d", charEnum);
-            g_ActiveCharacter = character;
-        }
-    }
-}
-
-static uintptr_t g_StringAddress = 0;
-static uintptr_t g_returnAddr = 0;
-
-__declspec(naked) void SessionHook() {
-    __asm {
-        pushfd
-        pushad
-        
-        // ESI contains the SessionCooperativeMD this pointer at this point in the function
-        mov eax, esi
-        push eax
-        call OnSessionUpdate
-        add esp, 4
-        
-        popad
-        popfd
-        
-        // Execute original instruction: push g_StringAddress
-        push g_StringAddress
-        
-        jmp g_returnAddr
-    }
-}
-
-static uintptr_t FindString(uintptr_t modBase, uintptr_t modSize, const char* str) {
-    size_t len = strlen(str);
-    uintptr_t p = modBase;
-    MEMORY_BASIC_INFORMATION mbi;
-    
-    while (p < modBase + modSize) {
-        if (VirtualQuery((void*)p, &mbi, sizeof(mbi)) == 0) break;
-        if (mbi.State == MEM_COMMIT && (mbi.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE))) {
-            uintptr_t end = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
-            if (end > modBase + modSize) end = modBase + modSize;
-            
-            for (uintptr_t i = (uintptr_t)mbi.BaseAddress; i < end - len; i++) {
-                if (memcmp((void*)i, str, len) == 0) {
-                    return i;
-                }
-            }
-        }
-        p = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
-    }
-    return 0;
-}
-
-static uintptr_t FindPush(uintptr_t modBase, uintptr_t modSize, uintptr_t strAddr) {
-    uintptr_t p = modBase;
-    MEMORY_BASIC_INFORMATION mbi;
-    
-    while (p < modBase + modSize) {
-        if (VirtualQuery((void*)p, &mbi, sizeof(mbi)) == 0) break;
-        if (mbi.State == MEM_COMMIT && (mbi.Protect & (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE))) {
-            uintptr_t end = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
-            if (end > modBase + modSize) end = modBase + modSize;
-            
-            for (uintptr_t i = (uintptr_t)mbi.BaseAddress; i < end - 5; i++) {
-                if (*(unsigned char*)i == 0x68 && *(uintptr_t*)(i + 1) == strAddr) {
-                    return i;
-                }
-            }
-        }
-        p = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
-    }
-    return 0;
-}
-
-static bool InstallSessionHook() {
-    static bool hooked = false;
-    static bool failed = false;
-    if (hooked) return true;
-    if (failed) return false;
-    
-    HMODULE hEngine = GetModuleHandleA("game_x86_rwdi.dll");
-    if (!hEngine) return false;
-    
-    uintptr_t modBase = (uintptr_t)hEngine;
-    uintptr_t modSize = 0x2000000; // Good enough estimate
-    
-    // Find the target string in the DLL
-    const char* targetStr = ", IsLobby = %s, IsTestMap = %s, Character = %s";
-    uintptr_t strAddr = FindString(modBase, modSize, targetStr);
-    
-    if (!strAddr) {
-        Log("Failed to find target string in game_x86_rwdi.dll");
-        failed = true;
-        return false;
-    }
-    
-    g_StringAddress = strAddr;
-    
-    // Find the PUSH instruction that references it
-    uintptr_t hookAddr = FindPush(modBase, modSize, strAddr);
-    
-    if (!hookAddr) {
-        Log("Failed to find PUSH instruction for the string");
-        failed = true;
-        return false;
-    }
-    
-    g_returnAddr = hookAddr + 5;
-    
-    // Patch in the jump to our hook
-    DWORD oldProtect;
-    if (VirtualProtect((void*)hookAddr, 5, PAGE_EXECUTE_READWRITE, &oldProtect)) {
-        *(unsigned char*)hookAddr = 0xE9;
-        *(uintptr_t*)(hookAddr + 1) = (uintptr_t)SessionHook - hookAddr - 5;
-        VirtualProtect((void*)hookAddr, 5, oldProtect, &oldProtect);
-        hooked = true;
-        Log("Dynamic SessionHook installed successfully at 0x%p!", (void*)hookAddr);
-        return true;
-    }
-    
-    failed = true;
-    return false;
-}
-
 std::optional<ECharacter> GameStateReader::ReadCharacterEnum() {
-    // Hotkeys: F5 = Ben, F6 = Kim, F7 = Eddie, F8 = Auto
-    /*
-    static std::optional<ECharacter> manualOverride;
-    
-    if (GetAsyncKeyState(VK_F5) & 0x8000) manualOverride = ECharacter::Ben;
-    if (GetAsyncKeyState(VK_F6) & 0x8000) manualOverride = ECharacter::Kim;
-    if (GetAsyncKeyState(VK_F7) & 0x8000) manualOverride = ECharacter::Eddie;
-    if (GetAsyncKeyState(VK_F8) & 0x8000) manualOverride = std::nullopt;
-    
-    if (manualOverride) {
-        return manualOverride;
+    // Our own coop status holds the character we picked
+    // Every player in a coop game has one of these, so it has to be ours, not just any of them
+    SessionKind kind = SessionKind::None;
+    if (void* status = ReadSessionStatus(kind); status && kind == SessionKind::Cooperative) {
+        int charEnum = -1;
+        if (SafeRead(status, kSessionCharacterOffset, charEnum) && GetCharacterName(static_cast<ECharacter>(charEnum))) {
+            lastCharacter_ = static_cast<ECharacter>(charEnum);
+        }
     }
-    */
+    if (lastCharacter_) return lastCharacter_;
 
     if (!ResolveGameSingleton()) return std::nullopt;
-    
-    InstallSessionHook();
-    
-    if (g_ActiveCharacter != ECharacter::Unknown) {
-        return g_ActiveCharacter;
-    }
-    
-    // Fallback: Try reading from save slot offsets (only if hook hasn't fired)
+
+    // Fallback: Try reading from save slot offsets (only if no session has been seen yet)
     void* pGame = SafeReadPtr(gameSingletonPointer_);
     if (pGame) {
         int kimSlot = SafeReadInt(static_cast<char*>(pGame) + kGameSaveSlotKimOffset);
@@ -286,14 +164,102 @@ std::optional<ECharacter> GameStateReader::ReadCharacterEnum() {
             return ECharacter::Eddie;
         }
     }
-    
+
     return std::nullopt;
+}
+
+// The vtable check keeps us from reading a stale or unrelated object
+void* GameStateReader::ReadSessionStatus(SessionKind& kind, void** sessionOut) {
+    kind = SessionKind::None;
+    if (!gameBase_) return nullptr;
+
+    const auto base = reinterpret_cast<uintptr_t>(gameBase_);
+    void* cgame = SafeReadPtr(reinterpret_cast<void*>(base + kGameCGamePointerRVA));
+    if (!cgame) return nullptr;
+
+    void* session = nullptr;
+    if (!SafeRead(cgame, kCGameSessionOffset, session) || !session) return nullptr;
+
+    void* status = nullptr;
+    if (!SafeRead(session, kSessionStatusOffset, status) || !status) return nullptr;
+
+    uintptr_t vtable = 0;
+    if (!SafeRead(status, 0, vtable)) return nullptr;
+
+    if (vtable == base + kStatusCompetitiveVtableRVA) {
+        kind = SessionKind::Competitive;
+    } else if (vtable == base + kStatusCooperativeMDVtableRVA) {
+        kind = SessionKind::Cooperative;
+    } else {
+        return nullptr;
+    }
+    if (sessionOut) *sessionOut = session;
+    return status;
+}
+
+MultiplayerState GameStateReader::ReadMultiplayer() {
+    MultiplayerState mp;
+    SessionKind kind = SessionKind::None;
+    void* session = nullptr;
+    void* status = ReadSessionStatus(kind, &session);
+    if (!status) return mp;
+
+    // The peer list holds everyone but us
+    int peers = -1;
+    if (SafeRead(session, kSessionPeerCountOffset, peers) && peers >= 0 && peers < 32) {
+        mp.playerCount = peers + 1;
+    }
+
+    if (kind == SessionKind::Competitive) {
+        int progress = -1;
+        if (!SafeRead(status, kCompProgressOffset, progress)) return mp;
+        mp.progress = static_cast<MatchProgress>(progress);
+
+        const auto base = reinterpret_cast<uintptr_t>(gameBase_);
+        // Until the profile finishes loading it holds level 1 and no experience
+        unsigned short level = 0;
+        unsigned int experience = 0;
+        void* profile = SafeReadPtr(reinterpret_cast<void*>(base + kGameProfilePointerRVA));
+        if (profile && SafeRead(profile, kProfileLevelOffset, level) && SafeRead(profile, kProfileExperienceOffset, experience) &&
+            level < 100 && (level > 1 || experience > 0)) {
+            mp.level = level;
+        }
+
+        void* controller = nullptr;
+        void* player = nullptr;
+        int team = 0;
+        if (SafeRead(session, kSessionPlayerControllerOffset, controller) && controller &&
+            SafeRead(controller, kControllerLogicalPlayerOffset, player) && player &&
+            SafeRead(player, kLogicalPlayerTeamOffset, team) && (team == 1 || team == 2)) {
+            mp.police = team == 1;
+        }
+    } else {
+        unsigned char isLobby = 0;
+        unsigned short ids[3] = {0xFFFF, 0xFFFF, 0xFFFF};
+        int visibility = 0;
+        if (!SafeRead(status, kCoopIsLobbyOffset, isLobby) ||
+            !SafeReadBytes(static_cast<char*>(status) + kCoopPlayerIdsOffset, ids, sizeof(ids)) ||
+            !SafeRead(status, kCoopVisibilityOffset, visibility)) {
+            return mp;
+        }
+        mp.coopLobby = isLobby != 0;
+        for (unsigned short id : ids) {
+            if (id != 0xFFFF) mp.coopPlayers++;
+        }
+        if (visibility >= 0 && visibility <= static_cast<int>(GameVisibility::LanCustom)) {
+            mp.visibility = static_cast<GameVisibility>(visibility);
+        }
+    }
+
+    mp.kind = kind;
+    return mp;
 }
 
 GameState GameStateReader::ReadState() {
     GameState state;
     
     if (!ResolvePointers()) {
+        state.starting = !unsupportedBuild_;
         return state;
     }
     
@@ -328,6 +294,8 @@ GameState GameStateReader::ReadState() {
         state.internalLevel = "MainMenu";
         state.chapterName = "Main Menu";
     }
+
+    state.mp = ReadMultiplayer();
 
     // Read character info
     if (config_.showCharacter) {

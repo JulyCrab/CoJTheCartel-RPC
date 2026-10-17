@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 
-// Call of Juarez: The Cartel chapter data
+// Call of Juarez: The Cartel chapter info stuff
 struct ChapterInfo {
     std::string internalName;
     std::string friendlyName;
@@ -37,7 +37,7 @@ inline const char* GetCharacterName(ECharacter enumValue, bool fullName = true) 
     return nullptr;
 }
 
-// Known level names - actual names get logged at runtime
+// Known level names
 struct ChapterEntry {
     const char* internalName;
     const char* friendlyName;
@@ -45,7 +45,8 @@ struct ChapterEntry {
 };
 
 inline constexpr ChapterEntry CARTEL_CHAPTERS[] = {
-    { "Menuback", "Main Menu", 0 },
+    { "menuback", "Main Menu", 0 }, // keys are lowercase, GetChapterInfo lowercases the level name
+    { "mainmenu", "Main Menu", 0 },
     { "plantation", "Chapter 1: Plantation", 6 },
     { "gangbang", "Chapter 2: Gang Bang", 13 },
     { "brothel", "Chapter 3: The Brothel", 20 },
@@ -66,7 +67,8 @@ inline constexpr ChapterEntry CARTEL_CHAPTERS[] = {
     { "mp_slums", "Map: Slums", 0 },
     { "mp_suburbs", "Map: Suburbs", 0 },
     { "mp_wasteland", "Map: Wasteland", 0 },
-    { "lobby_room", "Multiplayer Lobby", 0 }
+    { "lobby_room", "Multiplayer Lobby", 0 },
+    { "mp_lobby", "Multiplayer Lobby", 0 }
 };
 
 inline ChapterInfo GetChapterInfo(const std::string& internalName) {
@@ -86,7 +88,7 @@ inline ChapterInfo GetChapterInfo(const std::string& internalName) {
         }
     }
     
-    // Unknown level, just capitalize it and return
+    // Unknown level, just capitalize it and return duh
     std::string niceName = internalName;
     if (!niceName.empty() && niceName[0] >= 'a' && niceName[0] <= 'z') {
         niceName[0] = niceName[0] - ('a' - 'A');
